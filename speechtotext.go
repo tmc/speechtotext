@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -14,19 +15,80 @@ import (
 	speech "github.com/google/go-genproto/googleapis/cloud/speech/v1beta1"
 	gax "github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
+	"golang.org/x/time/rate"
 )
 
-var serviceKey = flag.String("key", "", "path to service account key created at https://console.developers.google.com/apis/credentials/serviceaccountkey")
+var (
+	serviceKey    = flag.String("key", "", "path to service account key created at https://console.developers.google.com/apis/credentials/serviceaccountkey")
+	bufSize       = flag.Int("bufSize", 1024, "size in bytes of the read buffer")
+	ratePerSecond = flag.Float64("rate", 10, "samples to send per second")
+)
 
 func main() {
 	flag.Parse()
+	log.Println("starting")
 	keyContents, err := ioutil.ReadFile(*serviceKey)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if err := run(keyContents); err != nil {
+	if err := runAsync(keyContents); err != nil {
 		log.Fatalln(err)
 	}
+}
+
+func runAsync(keyContents []byte) error {
+	ctx := context.Background()
+	client, err := speechClient(ctx, keyContents)
+	if err != nil {
+		return err
+	}
+	stream, err := client.StreamingRecognize(ctx)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		err = stream.Send(&speech.StreamingRecognizeRequest{
+			StreamingRequest: &speech.StreamingRecognizeRequest_StreamingConfig{
+				StreamingConfig: &speech.StreamingRecognitionConfig{
+					Config: &speech.RecognitionConfig{
+						Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): parameterize
+						SampleRate: 16000,
+					},
+					InterimResults: true,
+				},
+			},
+		})
+		var (
+			rerr error
+		)
+		buf := make([]byte, *bufSize)
+		limiter := rate.NewLimiter(rate.Limit(float64(time.Second)/(*ratePerSecond)), 0)
+		for rerr == nil {
+			fmt.Println("waiting")
+			limiter.Wait(ctx)
+			_, rerr = os.Stdin.Read(buf)
+			err := stream.Send(&speech.StreamingRecognizeRequest{
+				StreamingRequest: &speech.StreamingRecognizeRequest_AudioContent{
+					AudioContent: buf,
+				},
+			})
+			if err != nil {
+				rerr = err
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			log.Println("issue closing stream:", err)
+		}
+	}()
+	for {
+		resp, err := stream.Recv()
+		log.Println("Recv():", err, resp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func run(keyContents []byte) error {
@@ -42,7 +104,7 @@ func run(keyContents []byte) error {
 	}
 	resp, err := client.SyncRecognize(ctx, &speech.SyncRecognizeRequest{
 		Config: &speech.RecognitionConfig{
-			Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): paramaterize
+			Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): parameterize
 			SampleRate: 8000,
 		},
 		Audio: &speech.RecognitionAudio{
