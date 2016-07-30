@@ -52,7 +52,7 @@ func runAsync(keyContents []byte) error {
 			StreamingRequest: &speech.StreamingRecognizeRequest_StreamingConfig{
 				StreamingConfig: &speech.StreamingRecognitionConfig{
 					Config: &speech.RecognitionConfig{
-						Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): parameterize
+						Encoding:   speech.RecognitionConfig_FLAC, // TODO(): paramaterize
 						SampleRate: 16000,
 					},
 					InterimResults: true,
