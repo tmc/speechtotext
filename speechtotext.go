@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -20,13 +22,13 @@ import (
 
 var (
 	serviceKey    = flag.String("key", "", "path to service account key created at https://console.developers.google.com/apis/credentials/serviceaccountkey")
-	bufSize       = flag.Int("bufSize", 1024, "size in bytes of the read buffer")
-	ratePerSecond = flag.Float64("rate", 10, "samples to send per second")
+	bufSize       = flag.Int("bufSize", 10240, "size in bytes of the read buffer")
+	ratePerSecond = flag.Duration("rate", 1*time.Millisecond, "rate at which to send buffers")
+	verbose       = flag.Bool("v", false, "if true show response details")
 )
 
 func main() {
 	flag.Parse()
-	log.Println("starting")
 	keyContents, err := ioutil.ReadFile(*serviceKey)
 	if err != nil {
 		log.Fatalln(err)
@@ -46,13 +48,18 @@ func runAsync(keyContents []byte) error {
 	if err != nil {
 		return err
 	}
+	in, out := io.Pipe()
+	go func() {
+		io.Copy(out, os.Stdin)
+		out.CloseWithError(io.EOF)
+	}()
 
 	go func() {
 		err = stream.Send(&speech.StreamingRecognizeRequest{
 			StreamingRequest: &speech.StreamingRecognizeRequest_StreamingConfig{
 				StreamingConfig: &speech.StreamingRecognitionConfig{
 					Config: &speech.RecognitionConfig{
-						Encoding:   speech.RecognitionConfig_FLAC, // TODO(): paramaterize
+						Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): paramaterize
 						SampleRate: 16000,
 					},
 					InterimResults: true,
@@ -63,11 +70,10 @@ func runAsync(keyContents []byte) error {
 			rerr error
 		)
 		buf := make([]byte, *bufSize)
-		limiter := rate.NewLimiter(rate.Limit(float64(time.Second)/(*ratePerSecond)), 0)
+		limiter := rate.NewLimiter(rate.Every(*ratePerSecond), 1)
 		for rerr == nil {
-			fmt.Println("waiting")
 			limiter.Wait(ctx)
-			_, rerr = os.Stdin.Read(buf)
+			_, rerr = io.ReadAtLeast(in, buf, *bufSize)
 			err := stream.Send(&speech.StreamingRecognizeRequest{
 				StreamingRequest: &speech.StreamingRecognizeRequest_AudioContent{
 					AudioContent: buf,
@@ -81,11 +87,35 @@ func runAsync(keyContents []byte) error {
 			log.Println("issue closing stream:", err)
 		}
 	}()
+	maxLine := 0
+	defer fmt.Println()
 	for {
 		resp, err := stream.Recv()
-		log.Println("Recv():", err, resp)
 		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
+		}
+		if *verbose {
+			fmt.Println(resp)
+		}
+		if resp.Results != nil {
+			fmt.Printf("\r%s\r", strings.Repeat(" ", maxLine))
+			if resp.Results[0].Stability > 0.0 && resp.Results[0].Stability < 0.6 {
+				fmt.Printf("?")
+			}
+			transcript := resp.Results[0].Alternatives[0].Transcript
+			if len(transcript)+1 > maxLine {
+				maxLine = len(transcript) + 1
+			}
+			fmt.Print(transcript)
+			if *verbose {
+				fmt.Println()
+			}
+		}
+		if resp.EndpointerType == speech.StreamingRecognizeResponse_END_OF_SPEECH {
+			out.CloseWithError(io.EOF)
 		}
 	}
 	return nil

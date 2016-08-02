@@ -5,8 +5,8 @@ basic usage:
 ```sh
 $ uname
 Darwin
-$ ffmpeg -f avfoundation -i ":Built-in Microphone" -c:a flac -sample_fmt s16 -ar 16000 -f flac - > sample.flac
-(speak)
-<q>
-$ cat sample.flac | speechtotext -key (path to serviceaccount json key) -bufSize 1024
+$ cat sample.wav | speechtotext -key (path to serviceaccount json key)
+Alpha Beta gamma
+$
+$ ffmpeg -nostats -loglevel 0 -f avfoundation -i ":Built-in Microphone" -ar 16000 -acodec pcm_s16le -ac 1 -f wav - |tee out.wav | speechtotext -key (path to serviceaccount json key)
 ```
