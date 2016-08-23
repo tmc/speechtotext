@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 
-	speech "github.com/google/go-genproto/googleapis/cloud/speech/v1beta1"
 	gax "github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
+	speech "google.golang.org/genproto/googleapis/cloud/speech/v1beta1"
 )
 
 var (
