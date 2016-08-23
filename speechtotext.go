@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 
-	gax "github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
 	speech "google.golang.org/genproto/googleapis/cloud/speech/v1beta1"
@@ -162,12 +161,9 @@ func speechClient(ctx context.Context, keyContents []byte) (speech.SpeechClient,
 	if err != nil {
 		return nil, err
 	}
-	conn, err := gax.DialGRPC(ctx,
-		gax.WithEndpoint("speech.googleapis.com:443"),
-		gax.WithDialOptions(
-			grpc.WithPerRPCCredentials(acct),
-			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")),
-		),
+	conn, err := grpc.Dial("speech.googleapis.com:443",
+		grpc.WithPerRPCCredentials(acct),
+		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")),
 	)
 	return speech.NewSpeechClient(conn), err
 }
