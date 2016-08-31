@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -28,18 +27,14 @@ var (
 
 func main() {
 	flag.Parse()
-	keyContents, err := ioutil.ReadFile(*serviceKey)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	if err := runAsync(keyContents); err != nil {
+	if err := runAsync(*serviceKey); err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func runAsync(keyContents []byte) error {
+func runAsync(credsPath string) error {
 	ctx := context.Background()
-	client, err := speechClient(ctx, keyContents)
+	client, err := speechClient(ctx, credsPath)
 	if err != nil {
 		return err
 	}
@@ -117,52 +112,15 @@ func runAsync(keyContents []byte) error {
 			out.CloseWithError(io.EOF)
 		}
 	}
-	return nil
 }
 
-func run(keyContents []byte) error {
-	ctx := context.Background()
-	client, err := speechClient(ctx, keyContents)
-	if err != nil {
-		return err
-	}
-
-	stdinContent, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		return err
-	}
-	resp, err := client.SyncRecognize(ctx, &speech.SyncRecognizeRequest{
-		Config: &speech.RecognitionConfig{
-			Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): parameterize
-			SampleRate: 8000,
-		},
-		Audio: &speech.RecognitionAudio{
-			AudioSource: &speech.RecognitionAudio_Content{
-				Content: stdinContent,
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-	for _, result := range resp.Results {
-		for _, alt := range result.GetAlternatives() {
-			fmt.Println(alt.Transcript)
-		}
-	}
-	return nil
-}
-
-func speechClient(ctx context.Context, keyContents []byte) (speech.SpeechClient, error) {
-	acct, err := oauth.NewServiceAccountFromKey(
-		keyContents,
-		"https://www.googleapis.com/auth/cloud-platform",
-	)
+func speechClient(ctx context.Context, credsPath string) (speech.SpeechClient, error) {
+	creds, err := oauth.NewServiceAccountFromFile(credsPath, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return nil, err
 	}
 	conn, err := grpc.Dial("speech.googleapis.com:443",
-		grpc.WithPerRPCCredentials(acct),
+		grpc.WithPerRPCCredentials(creds),
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")),
 	)
 	return speech.NewSpeechClient(conn), err
