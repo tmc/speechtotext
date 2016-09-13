@@ -83,6 +83,7 @@ func runAsync(credsPath string) error {
 	}()
 	maxLine := 0
 	defer fmt.Println()
+
 	for {
 		resp, err := stream.Recv()
 		if err != nil {

@@ -1,6 +1,8 @@
 speechtotext
 ============
 
+This project is a basic example of streaming stdin to [Google Cloud Speech API](https://cloud.google.com/speech/) via [gRPC](http://www.grpc.io/).
+
 basic usage:
 ```sh
 $ uname
