@@ -9,13 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/api/option"
 
+	"cloud.google.com/go/speech/apiv1beta1"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
-	speech "google.golang.org/genproto/googleapis/cloud/speech/v1beta1"
+	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1beta1"
 )
 
 var (
@@ -34,7 +33,7 @@ func main() {
 
 func runAsync(credsPath string) error {
 	ctx := context.Background()
-	client, err := speechClient(ctx, credsPath)
+	client, err := speech.NewClient(ctx, option.WithServiceAccountFile(credsPath))
 	if err != nil {
 		return err
 	}
@@ -49,11 +48,11 @@ func runAsync(credsPath string) error {
 	}()
 
 	go func() {
-		err = stream.Send(&speech.StreamingRecognizeRequest{
-			StreamingRequest: &speech.StreamingRecognizeRequest_StreamingConfig{
-				StreamingConfig: &speech.StreamingRecognitionConfig{
-					Config: &speech.RecognitionConfig{
-						Encoding:   speech.RecognitionConfig_LINEAR16, // TODO(): paramaterize
+		err = stream.Send(&speechpb.StreamingRecognizeRequest{
+			StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
+				StreamingConfig: &speechpb.StreamingRecognitionConfig{
+					Config: &speechpb.RecognitionConfig{
+						Encoding:   speechpb.RecognitionConfig_LINEAR16, // TODO(): paramaterize
 						SampleRate: 16000,
 					},
 					InterimResults: true,
@@ -68,8 +67,8 @@ func runAsync(credsPath string) error {
 		for rerr == nil {
 			limiter.Wait(ctx)
 			_, rerr = io.ReadAtLeast(in, buf, *bufSize)
-			err := stream.Send(&speech.StreamingRecognizeRequest{
-				StreamingRequest: &speech.StreamingRecognizeRequest_AudioContent{
+			err := stream.Send(&speechpb.StreamingRecognizeRequest{
+				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
 					AudioContent: buf,
 				},
 			})
@@ -109,20 +108,8 @@ func runAsync(credsPath string) error {
 				fmt.Println()
 			}
 		}
-		if resp.EndpointerType == speech.StreamingRecognizeResponse_END_OF_SPEECH {
+		if resp.EndpointerType == speechpb.StreamingRecognizeResponse_END_OF_SPEECH {
 			out.CloseWithError(io.EOF)
 		}
 	}
-}
-
-func speechClient(ctx context.Context, credsPath string) (speech.SpeechClient, error) {
-	creds, err := oauth.NewServiceAccountFromFile(credsPath, "https://www.googleapis.com/auth/cloud-platform")
-	if err != nil {
-		return nil, err
-	}
-	conn, err := grpc.Dial("speech.googleapis.com:443",
-		grpc.WithPerRPCCredentials(creds),
-		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")),
-	)
-	return speech.NewSpeechClient(conn), err
 }
