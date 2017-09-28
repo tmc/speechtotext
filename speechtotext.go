@@ -22,7 +22,7 @@ var (
 	bufSize       = flag.Int("bufSize", 10240, "size in bytes of the read buffer")
 	ratePerSecond = flag.Duration("rate", 1*time.Millisecond, "rate at which to send buffers")
 	verbose       = flag.Bool("v", false, "if true show response details")
-	languageCode  = flag.String("lang", "", "the language of the supplied audio as a BCP-47 language tag, e.g: fa-IR See: https://cloud.google.com/speech/docs/languages ")
+	languageCode  = flag.String("lang", "en-US", "the language of the supplied audio as a BCP-47 language tag, e.g: fa-IR See: https://cloud.google.com/speech/docs/languages ")
 )
 
 func main() {
