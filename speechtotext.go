@@ -11,10 +11,10 @@ import (
 
 	"google.golang.org/api/option"
 
-	"cloud.google.com/go/speech/apiv1beta1"
+	speech "cloud.google.com/go/speech/apiv1"
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
-	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1beta1"
+	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 )
 
 var (
@@ -53,9 +53,9 @@ func runAsync(credsPath string) error {
 			StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
 				StreamingConfig: &speechpb.StreamingRecognitionConfig{
 					Config: &speechpb.RecognitionConfig{
-						LanguageCode: *languageCode,                         //"fa-IR" "en-US"
-						Encoding:     speechpb.RecognitionConfig_LINEAR16, // TODO(): paramaterize
-						SampleRate:   16000,
+						LanguageCode:    *languageCode,                       //"fa-IR" "en-US"
+						Encoding:        speechpb.RecognitionConfig_LINEAR16, // TODO(): paramaterize
+						SampleRateHertz: 16000,
 					},
 					InterimResults: true,
 				},
@@ -110,7 +110,7 @@ func runAsync(credsPath string) error {
 				fmt.Println()
 			}
 		}
-		if resp.EndpointerType == speechpb.StreamingRecognizeResponse_END_OF_SPEECH {
+		if resp.SpeechEventType == speechpb.StreamingRecognizeResponse_END_OF_SINGLE_UTTERANCE {
 			out.CloseWithError(io.EOF)
 		}
 	}
